@@ -9,8 +9,8 @@ use tauri::Emitter;
 use tauri_plugin_opener::OpenerExt;
 
 #[tauri::command]
-fn settings_get() -> settings::Settings {
-    settings::Settings::load()
+fn settings_get() -> settings::SettingsDto {
+    settings::Settings::load().into()
 }
 
 #[tauri::command]

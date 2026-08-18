@@ -9,7 +9,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface Settings {
   launchArgs: string;
@@ -56,7 +60,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   };
 
   const inputClass =
-    "w-full rounded-[10px] bg-[#252525] px-3.5 py-2.5 font-mono text-xs text-[#888] caret-[#888] outline-none";
+    "w-full rounded-[10px] bg-[#353535] px-3.5 py-2.5 font-mono text-xs text-[#888] caret-[#888] outline-none";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -72,7 +76,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
           <div>
             <label
               htmlFor="launch-args"
-              className="mb-1.5 block text-[10px] font-medium uppercase text-muted-foreground"
+              className="mb-1.5 block text-[10px] font-medium text-muted-foreground uppercase"
             >
               Launch Arguments
             </label>
@@ -81,6 +85,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
               value={launchArgs}
               onChange={(event) => setLaunchArgs(event.target.value)}
               spellCheck={false}
+              autoComplete="off"
               className={inputClass}
             />
           </div>
@@ -89,13 +94,16 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
               <TooltipTrigger>
                 <label
                   htmlFor="release-branch"
-                  className="mb-1.5 block text-[10px] font-medium uppercase text-muted-foreground"
+                  className="mb-1.5 block text-[10px] font-medium text-muted-foreground uppercase"
                 >
                   Release Branch
                 </label>
               </TooltipTrigger>
               <TooltipContent side="right">
-                <p>For advanced use cases only - changes the branch of LJE you download.</p>
+                <p>
+                  For advanced use cases only - changes the branch of LJE you
+                  download.
+                </p>
               </TooltipContent>
             </Tooltip>
             <input
@@ -103,6 +111,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
               value={releaseBranch}
               onChange={(event) => setReleaseBranch(event.target.value)}
               spellCheck={false}
+              autoComplete="off"
               className={inputClass}
             />
           </div>

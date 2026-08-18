@@ -26,6 +26,33 @@ impl Default for Settings {
     }
 }
 
+/// IPC-facing shape: camelCase, matching every other command contract.
+/// The on-disk `Settings` stays PascalCase for C# migration compatibility.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SettingsDto {
+    pub launch_args: String,
+    pub release_branch: String,
+}
+
+impl From<Settings> for SettingsDto {
+    fn from(settings: Settings) -> Self {
+        SettingsDto {
+            launch_args: settings.launch_args,
+            release_branch: settings.release_branch,
+        }
+    }
+}
+
+impl From<SettingsDto> for Settings {
+    fn from(dto: SettingsDto) -> Self {
+        Settings {
+            launch_args: dto.launch_args,
+            release_branch: dto.release_branch,
+        }
+    }
+}
+
 impl Settings {
     /// `%USERPROFILE%\.lje_launcher_settings.json`
     pub fn settings_path() -> Option<PathBuf> {

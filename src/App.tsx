@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open } from "@tauri-apps/plugin-dialog";
-import { Minus, Settings, Terminal, X } from "lucide-react";
+import { Folder, Minus, Settings, Terminal, X } from "lucide-react";
 
 import { ScriptsDialog } from "@/components/scripts-dialog";
 import { SettingsDialog } from "@/components/settings-dialog";
@@ -83,7 +83,9 @@ function App() {
       });
     };
 
-    wire<LogPayload>("log", (payload) => addLog(payload.message, payload.success));
+    wire<LogPayload>("log", (payload) =>
+      addLog(payload.message, payload.success),
+    );
     wire<LaunchState>("state", (state) => setLaunchState(state));
 
     if (!initRef.current) {
@@ -123,6 +125,14 @@ function App() {
     };
   }, [addLog]);
 
+  // Kill the WebView2 native context menu (copy/paste/inspect junk).
+  // WebView2 fires the DOM contextmenu first and honors preventDefault.
+  useEffect(() => {
+    const handler = (e: MouseEvent) => e.preventDefault();
+    window.addEventListener("contextmenu", handler);
+    return () => window.removeEventListener("contextmenu", handler);
+  }, []);
+
   // The window starts hidden (tauri.conf.json "visible": false) so the user
   // never sees the transparent startup frame; reveal it after first paint.
   useEffect(() => {
@@ -140,7 +150,8 @@ function App() {
       '[data-slot="scroll-area-viewport"]',
     );
     if (!viewport) return;
-    const fromBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
+    const fromBottom =
+      viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
     if (fromBottom < 40) viewport.scrollTop = viewport.scrollHeight;
   }, [logs]);
 
@@ -161,22 +172,25 @@ function App() {
     }
   }, [addLog]);
 
-  const handleDownload = useCallback(async (onError?: (message: string) => void) => {
-    try {
-      addLog("downloading update...");
-      await invoke("download_update");
-      addLog("update downloaded!", true);
-      setUpdateAvailable(false);
-      setVersion(await invoke<string>("get_current_version"));
-    } catch (error) {
-      const message = errMsg(error);
-      const friendly = message.includes("used by another process")
-        ? "failed to update: please close gmod if it's open"
-        : `failed to update: ${message}`;
-      addLog(friendly);
-      onError?.(friendly);
-    }
-  }, [addLog]);
+  const handleDownload = useCallback(
+    async (onError?: (message: string) => void) => {
+      try {
+        addLog("downloading update...");
+        await invoke("download_update");
+        addLog("update downloaded!", true);
+        setUpdateAvailable(false);
+        setVersion(await invoke<string>("get_current_version"));
+      } catch (error) {
+        const message = errMsg(error);
+        const friendly = message.includes("used by another process")
+          ? "failed to update: please close gmod if it's open"
+          : `failed to update: ${message}`;
+        addLog(friendly);
+        onError?.(friendly);
+      }
+    },
+    [addLog],
+  );
 
   const handleInject = useCallback(async () => {
     if (injecting) {
@@ -218,7 +232,7 @@ function App() {
         data-tauri-drag-region="deep"
         className="h-dvh overflow-hidden rounded-[12px] border border-[#222] bg-background"
       >
-      <main className="grid h-full grid-rows-[auto_1fr_auto]">
+        <main className="grid h-full grid-rows-[auto_1fr_auto]">
           <header data-tauri-drag-region="deep" className="px-6 pt-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
@@ -229,12 +243,17 @@ function App() {
                   className="h-8 select-none"
                 />
                 <span
-                  className={cn("size-2.5 rounded-full", LED_CLASSES[launchState])}
+                  className={cn(
+                    "size-2 rounded-full",
+                    LED_CLASSES[launchState],
+                  )}
                   aria-hidden="true"
                 />
               </div>
               <div className="flex items-center gap-1">
-                <span className="mr-2 font-mono text-[11px] text-muted-foreground">{version}</span>
+                <span className="mr-2 font-mono text-[11px] text-muted-foreground">
+                  {version}
+                </span>
                 <button
                   type="button"
                   onClick={() => setScriptsOpen(true)}
@@ -271,11 +290,11 @@ function App() {
             </div>
             {updateAvailable && !notInstalled && (
               <div className="mt-1.5 flex items-center text-[11px] text-[#cc5555]">
-                <span>out of date — </span>
+                <span>out of date:</span>
                 <button
                   type="button"
                   onClick={() => void handleDownload()}
-                  className="cursor-pointer underline underline-offset-2"
+                  className="ml-1 cursor-pointer underline underline-offset-2"
                 >
                   update
                 </button>
@@ -302,61 +321,73 @@ function App() {
             </section>
           ) : (
             <>
-          <section className="flex min-h-0 flex-col gap-3.5 px-6 pt-3">
-            <div>
-              <div className="mb-1.5 flex items-center justify-between">
-                <span className="text-[10px] font-medium uppercase text-muted-foreground">
-                  GMOD PATH
-                </span>
-                <button
-                  type="button"
-                  onClick={handleChangePath}
-                  className="cursor-pointer text-[11px] text-[#dda770] hover:underline"
-                >
-                  Change
-                </button>
-              </div>
-              <div className="truncate rounded-[10px] bg-[#252525] px-3.5 py-2.5 font-mono text-xs text-muted-foreground">
-                {gmodPath ?? "finding GMod..."}
-              </div>
-            </div>
-
-            <div className="flex min-h-0 flex-1 flex-col">
-              <div className="mb-1.5 flex items-center justify-between">
-                <span className="text-[10px] font-medium uppercase text-muted-foreground">
-                  LOG
-                </span>
-              </div>
-              <div className="flex min-h-0 flex-1 flex-col rounded-[10px] bg-[#252525] px-3.5 py-2.5">
-                <ScrollArea ref={scrollAreaRef} className="min-h-0 flex-1">
-                  <div>
-                    {logs.map((entry, index) => (
-                      <div
-                        key={index}
-                        className="py-px font-mono text-xs whitespace-pre-wrap break-words"
-                      >
-                        <span className="text-[#505050]">{entry.time}  </span>
-                        <span className={entry.success ? "text-[#639922]" : "text-muted-foreground"}>
-                          {entry.message}
-                        </span>
-                      </div>
-                    ))}
+              <section className="flex min-h-0 flex-col gap-3.5 px-6 pt-3">
+                <div>
+                  <div className="mb-1.5 flex items-center justify-between">
+                    <span className="text-[10px] font-medium text-muted-foreground uppercase">
+                      GMOD PATH
+                    </span>
                   </div>
-                </ScrollArea>
-              </div>
-            </div>
-          </section>
+                  <button
+                    type="button"
+                    onClick={handleChangePath}
+                    className="flex w-full cursor-pointer items-center justify-between rounded-[10px] bg-[#252525] px-3.5 py-2.5 text-left font-mono text-xs text-muted-foreground"
+                  >
+                    <span className="min-w-0 truncate">
+                      {gmodPath ?? "finding GMod..."}
+                    </span>
+                    <Folder className="ml-1 inline size-3 shrink-0 text-muted-foreground" />
+                  </button>
+                </div>
 
-          <footer className="flex px-6 py-4">
-            <Button className="w-full" disabled={injecting} onClick={handleInject}>
-              Launch
-            </Button>
-          </footer>
+                <div className="flex min-h-0 flex-1 flex-col">
+                  <div className="mb-1.5 flex items-center justify-between">
+                    <span className="text-[10px] font-medium text-muted-foreground uppercase">
+                      LOG
+                    </span>
+                  </div>
+                  <div className="flex min-h-0 flex-1 flex-col rounded-[10px] bg-[#252525] px-3.5 py-2.5">
+                    <ScrollArea ref={scrollAreaRef} className="min-h-0 flex-1">
+                      <div>
+                        {logs.map((entry, index) => (
+                          <div
+                            key={index}
+                            className="py-px font-mono text-xs break-words whitespace-pre-wrap"
+                          >
+                            <span className="text-[#505050]">
+                              {entry.time}{" "}
+                            </span>
+                            <span
+                              className={
+                                entry.success
+                                  ? "text-[#639922]"
+                                  : "text-muted-foreground"
+                              }
+                            >
+                              {entry.message}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </div>
+                </div>
+              </section>
+
+              <footer className="flex px-6 py-4">
+                <Button
+                  className="w-full cursor-pointer"
+                  disabled={injecting}
+                  onClick={handleInject}
+                >
+                  Launch
+                </Button>
+              </footer>
             </>
           )}
         </main>
-      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
-      <ScriptsDialog open={scriptsOpen} onOpenChange={setScriptsOpen} />
+        <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+        <ScriptsDialog open={scriptsOpen} onOpenChange={setScriptsOpen} />
       </div>
     </TooltipProvider>
   );
