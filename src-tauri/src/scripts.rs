@@ -14,6 +14,28 @@ const DISABLED_FILE: &str = "info.toml.disabled";
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ScriptGitInfo {
+    pub commit: Option<String>,
+    pub branch: Option<String>,
+    pub ahead: u32,
+    pub behind: u32,
+    pub dirty: bool,
+}
+
+impl From<crate::git::GitStatus> for ScriptGitInfo {
+    fn from(s: crate::git::GitStatus) -> Self {
+        ScriptGitInfo {
+            commit: s.commit,
+            branch: s.branch,
+            ahead: s.ahead,
+            behind: s.behind,
+            dirty: s.dirty,
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ScriptInfo {
     pub name: Option<String>,
     pub author: Option<String>,
@@ -23,6 +45,9 @@ pub struct ScriptInfo {
     pub enabled: bool,
     /// Full path of the script folder (passed back to toggle).
     pub path: String,
+    /// If it is managed by Git (recommended)
+    pub is_git: bool,
+    pub git_info: Option<ScriptGitInfo>,
 }
 
 #[derive(serde::Deserialize)]
@@ -77,6 +102,14 @@ pub fn list_scripts() -> Vec<ScriptInfo> {
         };
 
         let meta = parsed.script;
+        let is_git = path.join(".git").exists();
+
+        let git_info = if is_git {
+            crate::git::status(&path).ok().map(Into::into)
+        } else {
+            None
+        };
+
         scripts.push(ScriptInfo {
             name: meta.name,
             author: meta.author,
@@ -85,6 +118,8 @@ pub fn list_scripts() -> Vec<ScriptInfo> {
             dependencies: meta.dependencies.unwrap_or_default(),
             enabled,
             path: path.to_string_lossy().into_owned(),
+            is_git,
+            git_info
         });
     }
 

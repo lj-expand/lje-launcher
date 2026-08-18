@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { FolderOpen } from "lucide-react";
+import { Download, FolderOpen } from "lucide-react";
 
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +14,14 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 
+interface ScriptGitInfo {
+  commit: string | null;
+  branch: string | null;
+  ahead: number;
+  behind: number;
+  dirty: boolean;
+}
+
 interface ScriptInfo {
   name: string | null;
   author: string | null;
@@ -22,6 +30,8 @@ interface ScriptInfo {
   dependencies: string[];
   enabled: boolean;
   path: string;
+  isGit: boolean;
+  gitInfo: ScriptGitInfo | null;
 }
 
 interface ScriptsDialogProps {
@@ -39,6 +49,8 @@ export function ScriptsDialog({ open, onOpenChange }: ScriptsDialogProps) {
   const [scripts, setScripts] = useState<ScriptInfo[] | null>(null);
   const [scriptsRoot, setScriptsRoot] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [pullingPath, setPullingPath] = useState<string | null>(null);
 
   const load = async () => {
     try {
@@ -75,6 +87,56 @@ export function ScriptsDialog({ open, onOpenChange }: ScriptsDialogProps) {
             )
           : prev,
       );
+    }
+  };
+
+  const applyInfo = (path: string, info: ScriptGitInfo | null) =>
+    setScripts((prev) =>
+      prev
+        ? prev.map((s) => (s.path === path ? { ...s, gitInfo: info } : s))
+        : prev,
+    );
+
+  // Fetches every git-managed script in parallel.
+  const checkUpdates = async () => {
+    if (!scripts) return;
+    setChecking(true);
+    setError(null);
+    try {
+      const results = await Promise.all(
+        scripts
+          .filter((s) => s.isGit)
+          .map(async (s) => {
+            try {
+              const info = await invoke<ScriptGitInfo>("script_check", {
+                path: s.path,
+              });
+              return { path: s.path, info, error: null as string | null };
+            } catch (e) {
+              return { path: s.path, info: null, error: errMsg(e) };
+            }
+          }),
+      );
+      for (const r of results) applyInfo(r.path, r.info);
+      const firstError = results.find((r) => r.error)?.error;
+      if (firstError) setError(firstError);
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const pull = async (script: ScriptInfo) => {
+    setPullingPath(script.path);
+    setError(null);
+    try {
+      const info = await invoke<ScriptGitInfo>("script_pull", {
+        path: script.path,
+      });
+      applyInfo(script.path, info);
+    } catch (e) {
+      setError(`pull failed: ${errMsg(e)}`);
+    } finally {
+      setPullingPath(null);
     }
   };
 
@@ -128,6 +190,24 @@ export function ScriptsDialog({ open, onOpenChange }: ScriptsDialogProps) {
                       {script.author ?? "unknown"}
                       {script.version ? ` · ${script.version}` : ""}
                     </p>
+                    {script.isGit && script.gitInfo && (
+                      <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                        <span className="font-mono text-[10px] text-muted-foreground">
+                          {script.gitInfo.branch ?? "?"} ·{" "}
+                          {script.gitInfo.commit ?? "?"}
+                        </span>
+                        {script.gitInfo.dirty && (
+                          <span className="text-[10px] text-[#dda770]">
+                            modified
+                          </span>
+                        )}
+                        {script.gitInfo.behind > 0 && (
+                          <span className="text-[10px] text-[#dda770]">
+                            ↓ {script.gitInfo.behind} behind
+                          </span>
+                        )}
+                      </div>
+                    )}
                     {script.dependencies.length > 0 && (
                       <div className="mt-1 flex flex-wrap gap-1">
                         {script.dependencies.map((dep) => {
@@ -153,6 +233,20 @@ export function ScriptsDialog({ open, onOpenChange }: ScriptsDialogProps) {
                     )}
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
+                    {script.isGit &&
+                      script.gitInfo &&
+                      script.gitInfo.behind > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => void pull(script)}
+                          disabled={pullingPath === script.path}
+                          aria-label={`Pull ${script.name ?? script.path}`}
+                          title={`Pull (${script.gitInfo.behind} behind)`}
+                          className="cursor-pointer p-1 text-[#dda770] hover:text-foreground disabled:opacity-50"
+                        >
+                          <Download className="size-3.5" />
+                        </button>
+                      )}
                     <button
                       type="button"
                       onClick={() =>
@@ -181,7 +275,17 @@ export function ScriptsDialog({ open, onOpenChange }: ScriptsDialogProps) {
           </div>
         </ScrollArea>
 
-        <div className="flex justify-end">
+        <div className="flex items-center justify-end gap-3">
+          {scripts?.some((s) => s.isGit) && (
+            <button
+              type="button"
+              onClick={() => void checkUpdates()}
+              disabled={checking}
+              className="cursor-pointer text-[11px] text-[#dda770] hover:underline disabled:opacity-50"
+            >
+              {checking ? "checking…" : "check for updates"}
+            </button>
+          )}
           <button
             type="button"
             onClick={() =>

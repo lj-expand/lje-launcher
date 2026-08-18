@@ -4,6 +4,7 @@ mod scripts;
 mod settings;
 mod updater;
 mod vdf;
+mod git;
 
 use tauri::Emitter;
 use tauri_plugin_opener::OpenerExt;
@@ -66,6 +67,40 @@ fn set_script_enabled(path: String, enabled: bool) -> Result<(), String> {
     scripts::set_script_enabled(&path, enabled)
 }
 
+/// Local git state for a script folder (no network).
+#[tauri::command]
+async fn script_status(path: String) -> Result<scripts::ScriptGitInfo, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        git::status(std::path::Path::new(&path)).map(Into::into)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Fetches from origin, then returns the fresh git state.
+#[tauri::command]
+async fn script_check(path: String) -> Result<scripts::ScriptGitInfo, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let dir = std::path::PathBuf::from(&path);
+        git::git_or(&dir, &["fetch"])?;
+        git::status(&dir).map(Into::into)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Pulls with --ff-only (never merges diverged history), then re-reads state.
+#[tauri::command]
+async fn script_pull(path: String) -> Result<scripts::ScriptGitInfo, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let dir = std::path::PathBuf::from(&path);
+        git::git_or(&dir, &["pull", "--ff-only"])?;
+        git::status(&dir).map(Into::into)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 /// Emits state "fail" and returns the error, so the frontend logs
 /// "injection failed: {msg}".
 fn inject_failed(app: &tauri::AppHandle, message: String) -> Result<(), String> {
@@ -105,7 +140,10 @@ pub fn run() {
             scripts_dir,
             open_folder,
             list_scripts,
-            set_script_enabled
+            set_script_enabled,
+            script_status,
+            script_check,
+            script_pull
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
