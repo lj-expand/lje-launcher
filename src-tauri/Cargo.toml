@@ -1,6 +1,6 @@
 [package]
 name = "lje-launcher"
-version = "0.3.0"
+version = "0.4.0"
 description = "Launcher for LJE (lj-expand)"
 authors = ["yogwoggf"]
 edition = "2021"
@@ -34,3 +34,6 @@ windows = { version = "0.62", features = [
     "Win32_Storage_FileSystem",
 ] }
 
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt", "time", "net"] }

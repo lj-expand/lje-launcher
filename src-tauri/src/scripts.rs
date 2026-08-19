@@ -4,7 +4,7 @@
 //! so that the warning won't be spammed when a script is disabled.
 
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
@@ -68,6 +68,17 @@ struct ScriptMeta {
 pub fn scripts_dir() -> PathBuf {
     let home = std::env::var_os("USERPROFILE").unwrap_or_default();
     PathBuf::from(home).join(".lje").join(SCRIPTS_DIR_NAME)
+}
+
+/// Reads the `dependencies` array from a script folder's `info.toml`.
+pub fn read_dependencies(dir: &Path) -> Vec<String> {
+    let Ok(text) = fs::read_to_string(dir.join(INFO_FILE)) else {
+        return Vec::new();
+    };
+    let Ok(parsed) = toml::from_str::<ScriptToml>(&text) else {
+        return Vec::new();
+    };
+    parsed.script.dependencies.unwrap_or_default()
 }
 
 /// Lists all scripts, sorted by name. Folders without a parseable

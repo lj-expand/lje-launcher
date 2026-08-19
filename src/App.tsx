@@ -9,6 +9,7 @@ import { ScriptsDialog } from "@/components/scripts-dialog";
 import { SettingsDialog } from "@/components/settings-dialog";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
@@ -386,8 +387,9 @@ function App() {
             </>
           )}
         </main>
-        <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
-        <ScriptsDialog open={scriptsOpen} onOpenChange={setScriptsOpen} />
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+      <ScriptsDialog open={scriptsOpen} onOpenChange={setScriptsOpen} />
+      <Toaster />
       </div>
     </TooltipProvider>
   );

@@ -1,5 +1,7 @@
+mod binaries;
 mod injector;
 mod locator;
+mod registry;
 mod scripts;
 mod settings;
 mod updater;
@@ -95,10 +97,54 @@ async fn script_pull(path: String) -> Result<scripts::ScriptGitInfo, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let dir = std::path::PathBuf::from(&path);
         git::git_or(&dir, &["pull", "--ff-only"])?;
+        // Sync submodules to the newly-recorded pins; best-effort so a
+        // failed submodule fetch doesn't fail the whole pull (the dirty
+        // flag will surface it in the UI).
+        let _ = git::git(&dir, &["submodule", "update", "--init", "--recursive"]);
         git::status(&dir).map(Into::into)
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+/// Pulls the script registry artifact, caches it, returns data.
+#[tauri::command]
+async fn registry_refresh() -> Result<registry::RegistryData, String> {
+    registry::refresh().await
+}
+
+/// Reads the cached registry artifact.
+#[tauri::command]
+fn registry_list() -> Result<registry::RegistryData, String> {
+    registry::list()
+}
+
+/// Installs a registry script by name, resolving dependencies recursively.
+#[tauri::command]
+async fn registry_install(name: String) -> Result<registry::InstallResult, String> {
+    tauri::async_runtime::spawn_blocking(move || registry::install(&name))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// Lists `lje-*.dll` binaries in ~/.lje/binaries.
+#[tauri::command]
+fn list_binaries() -> Vec<binaries::BinaryInfo> {
+    binaries::list_binaries()
+}
+
+/// Enables/disables a binary by renaming `.dll` <-> `.dll.disabled`.
+#[tauri::command]
+fn set_binary_enabled(path: String, enabled: bool) -> Result<(), String> {
+    binaries::set_binary_enabled(&path, enabled)
+}
+
+/// Removes a script folder by name.
+#[tauri::command]
+async fn registry_uninstall(name: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || registry::uninstall(&name))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 /// Emits state "fail" and returns the error, so the frontend logs
@@ -143,7 +189,13 @@ pub fn run() {
             set_script_enabled,
             script_status,
             script_check,
-            script_pull
+            script_pull,
+            registry_refresh,
+            registry_list,
+            registry_install,
+            registry_uninstall,
+            list_binaries,
+            set_binary_enabled
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
